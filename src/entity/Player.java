@@ -1,7 +1,10 @@
 package entity;
 
 import main.KeyHandler;
+import main.UtilityTool;
+
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.io.IOException;
 import javax.imageio.ImageIO;
 import main.GamePanel;
@@ -10,68 +13,171 @@ import java.awt.image.BufferedImage;
 public class Player extends Entity {
     GamePanel gp;
     KeyHandler keyH;
+    
+    public final int screenX;
+    public final int screenY;
+    public int hasKey = 0;
+    
+    
+    
     public Player(GamePanel gp, KeyHandler keyH) {
         this.gp = gp;
         this.keyH = keyH;
+        
+        screenX = gp.screenWidth / 2 - gp.tileSize/2;
+        screenY = gp.screenHeight / 2 - gp.tileSize/2;
+        // set solid area
+        solidArea = new Rectangle();
+        
+        solidArea.x = 8;
+        solidArea.y = 16;
+        solidAreaDefaultX = solidArea.x;
+        solidAreaDefaultY = solidArea.y;
+        solidArea.width = 26;
+        solidArea.height = 26;
+        
+        
         setDefaultValues();
         getPlayerImage();
     }
 
     public void setDefaultValues() {
-        x = 100;
-        y = 100;
+        worldX = gp.tileSize * 23;
+        worldY = gp.tileSize * 21;
         speed = 4;
         direction = "down";
 
     }
     public void getPlayerImage() {
-        try{
-            up1 = ImageIO.read(getClass().getResourceAsStream("/player/boy_up_1.png"));
-            up2 = ImageIO.read(getClass().getResourceAsStream("/player/boy_up_2.png"));
-            down1 = ImageIO.read(getClass().getResourceAsStream("/player/boy_down_1.png"));
-            down2 = ImageIO.read(getClass().getResourceAsStream("/player/boy_down_2.png"));
-            left1 = ImageIO.read(getClass().getResourceAsStream("/player/boy_left_1.png"));
-            left2 = ImageIO.read(getClass().getResourceAsStream("/player/boy_left_2.png"));
-            right1 = ImageIO.read(getClass().getResourceAsStream("/player/boy_right_1.png"));
-            right2 = ImageIO.read(getClass().getResourceAsStream("/player/boy_right_2.png"));
-        }catch(IOException e){
+        
+        // Lưu ý: setup() cần được định nghĩa trong cùng class hoặc được truy cập thông qua một đối tượng.
+        // Giả sử setup() là phương thức của cùng class Player hoặc một class tương tự.
+
+        up1 = setup("boy_up_1");
+        up2 = setup("boy_up_2");
+        down1 = setup("boy_down_1");
+        down2 = setup("boy_down_2");
+        left1 = setup("boy_left_1");
+        left2 = setup("boy_left_2");
+        right1 = setup("boy_right_1");
+        right2 = setup("boy_right_2");
+        
+    }
+    
+    public BufferedImage setup(String imageName) {
+        
+        UtilityTool uTool = new UtilityTool();
+        BufferedImage image = null;
+        
+        try {
+            // Đọc file ảnh từ thư mục tài nguyên, trong thư mục con "/player/".
+            image = ImageIO.read(getClass().getResourceAsStream("/player/" + imageName + ".png"));
+            
+            // Thay đổi kích thước ảnh đã đọc thành kích thước ô gạch chuẩn của game (gp.tileSize x gp.tileSize).
+            image = uTool.scaleImage(image, gp.tileSize, gp.tileSize);
+            
+        } catch (IOException e) {
+            // Bắt lỗi nếu không thể đọc file ảnh.
             e.printStackTrace();
         }
         
+        // Trả về đối tượng ảnh đã tải và thay đổi kích thước.
+        return image;
     }
 
 
     public void update() {
-    	if(keyH.upPressed || keyH.downPressed || keyH.leftPressed || keyH.rightPressed)
-    	{
-    		if(keyH.upPressed) {
+        if (keyH.upPressed || keyH.downPressed || keyH.leftPressed || keyH.rightPressed) {
+            if (keyH.upPressed) {
                 direction = "up";
-                y -= speed;
-            }
-            else if(keyH.downPressed) {
+            } else if (keyH.downPressed) {
                 direction = "down";
-                y += speed;
-            }
-            else if(keyH.leftPressed) {
+            } else if (keyH.leftPressed) {
                 direction = "left";
-                x -= speed;
-            }
-            else if(keyH.rightPressed) {
+            } else if (keyH.rightPressed) {
                 direction = "right";
-                x += speed;
             }
-
+            // CHECK TILE COLLISION
+            collisionOn = false;
+            gp.cChecker.checkTile(this);
+            //CHECK OBJ COLLISION
+            int objIndex = gp.cChecker.checkObject(this, true);
+            pickUpObject(objIndex);
+            // IF COLLISION IS FALSE, PLAYER CAN MOVE
+            if (collisionOn == false) {
+                switch (direction) {
+                    case "up":
+                        worldY -= speed;
+                        break;
+                    case "down":
+                        worldY += speed;
+                        break;
+                    case "left":
+                        worldX -= speed;
+                        break;
+                    case "right":
+                        worldX += speed;
+                        break;
+                }
+            }
+            // ANIMATION
             spriteCounter++;
-            if(spriteCounter > 12) {
-                if(spriteNum == 1) {
+            if (spriteCounter > 12) {
+                if (spriteNum == 1) {
                     spriteNum = 2;
-                } else if(spriteNum == 2) {
+                } else if (spriteNum == 2) {
                     spriteNum = 1;
                 }
                 spriteCounter = 0;
             }
-    	}
+        }
     }
+    
+    public void pickUpObject(int i) {
+
+        if (i != 999) { // 999 nghĩa là không chạm object nào
+
+            String objectName = gp.obj[i].name; // Lấy tên của object đang va chạm
+
+            switch (objectName) {
+
+                case "Key":
+                    gp.playSE(1);              // Phát âm thanh nhặt chìa khóa
+                    hasKey++;                  // Tăng số chìa khóa người chơi có
+                    gp.obj[i] = null;          // Xóa object khỏi bản đồ
+                    gp.ui.showMessage("You got a key!"); // Hiện thông báo lên màn hình
+                    break;
+
+                case "Door":
+                    if (hasKey > 0) {
+                        gp.playSE(3);          // Phát âm thanh mở cửa
+                        gp.obj[i] = null;      // Xóa cửa khỏi bản đồ
+                        hasKey--;              // Trừ đi 1 chìa khóa
+                        gp.ui.showMessage("You opened the door!");
+                    } else {
+                        gp.ui.showMessage("You need a key!");
+                    }
+                    break;
+
+                case "Boots":
+                    gp.playSE(2);              // Phát âm thanh nhặt giày
+                    speed += 2;                // Tăng tốc độ di chuyển
+                    gp.obj[i] = null;          // Xóa object khỏi bản đồ
+                    gp.ui.showMessage("Speed up!");
+                    break;
+
+                case "Chest":
+                    gp.ui.showMessage("You opened the chest!");
+                    gp.stopMusic();             // Dừng nhạc nền
+                    gp.playSE(4);               // Phát fanfare khi thắng
+                    gp.ui.gameFinished = true;
+                    // Bạn có thể thêm: gameWin = true; để dừng game
+                    break;
+            }
+        }
+    }
+
+
     public void draw(Graphics2D g2) {
         // if images failed to load, fallback to a simple blue rectangle so player is visible
         BufferedImage image = null;
@@ -105,7 +211,7 @@ public class Player extends Entity {
                 }
                 break;
         }
-        g2.drawImage(image, x, y, gp.tileSize, gp.tileSize, null);
+        g2.drawImage(image, screenX, screenY, null);
     }
 
 
